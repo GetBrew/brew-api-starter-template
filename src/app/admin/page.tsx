@@ -1,9 +1,10 @@
 import Link from 'next/link'
-import { brew } from '@/lib/brew'
+import { getBrewClient } from '@/lib/brew'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminPage() {
+  const brew = getBrewClient()
   const [domains, emails, count, audiences] = await Promise.all([
     brew.domains.list(),
     brew.emails.list(),
@@ -28,16 +29,16 @@ export default async function AdminPage() {
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard label="Total contacts" value={count.toLocaleString()} />
-          <StatCard label="Domains" value={domains.domains.length.toString()} />
-          <StatCard label="Emails" value={emails.emails.length.toString()} />
+          <StatCard label="Domains" value={domains.data.length.toString()} />
+          <StatCard label="Emails" value={emails.data.length.toString()} />
         </section>
 
         <Section title="Domains" hint="Copy a domainId into BREW_DOMAIN_ID in .env.local">
-          {domains.domains.length === 0 ? (
+          {domains.data.length === 0 ? (
             <Empty>No verified domains yet.</Empty>
           ) : (
             <Table headers={['Domain', 'domainId']}>
-              {domains.domains.map((d) => (
+              {domains.data.map((d) => (
                 <tr key={d.domainId} className="border-t border-zinc-200 dark:border-zinc-800">
                   <Td>{d.domainUrl}</Td>
                   <Td><Code>{d.domainId}</Code></Td>
@@ -47,14 +48,14 @@ export default async function AdminPage() {
           )}
         </Section>
 
-        <Section title="Emails" hint="Welcome emails are generated per signup; saved emails are listed here for reference.">
-          {emails.emails.length === 0 ? (
+        <Section title="Emails" hint="Choose a saved welcome design and configure BREW_WELCOME_EMAIL_ID.">
+          {emails.data.length === 0 ? (
             <Empty>No emails yet — create one in the Brew dashboard.</Empty>
           ) : (
             <Table headers={['Title', 'emailId']}>
-              {emails.emails.map((e) => (
+              {emails.data.map((e) => (
                 <tr key={e.emailId} className="border-t border-zinc-200 dark:border-zinc-800">
-                  <Td>{e.emailTitle}</Td>
+                  <Td>{e.title}</Td>
                   <Td><Code>{e.emailId}</Code></Td>
                 </tr>
               ))}
@@ -63,11 +64,11 @@ export default async function AdminPage() {
         </Section>
 
         <Section title="Audiences">
-          {audiences.audiences.length === 0 ? (
+          {audiences.data.length === 0 ? (
             <Empty>No saved audiences.</Empty>
           ) : (
             <Table headers={['Name', 'audienceId']}>
-              {audiences.audiences.map((a) => (
+              {audiences.data.map((a) => (
                 <tr key={a.audienceId} className="border-t border-zinc-200 dark:border-zinc-800">
                   <Td>{a.audienceName}</Td>
                   <Td><Code>{a.audienceId}</Code></Td>

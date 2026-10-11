@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 
 type Status =
   | { kind: 'idle' }
@@ -12,22 +12,30 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [marketingConsent, setMarketingConsent] = useState(false)
+  const submission = useRef<{ body: string; key: string } | null>(null)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (status.kind === 'loading') return
+    const body = JSON.stringify({ email, firstName, lastName, marketingConsent })
+    if (submission.current?.body !== body) submission.current = { body, key: crypto.randomUUID() }
+    const key = submission.current.key
     setStatus({ kind: 'loading' })
     try {
       const res = await fetch('/api/signup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, firstName, lastName }),
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+        body,
       })
       const data = await res.json()
       if (!res.ok) {
         setStatus({ kind: 'error', message: data.error ?? 'Something went wrong' })
         return
       }
+      submission.current = null
+      setMarketingConsent(false)
       setStatus({ kind: 'success' })
       setEmail('')
       setFirstName('')
@@ -49,7 +57,7 @@ export default function SignupPage() {
           Join the list
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Sign up and we&apos;ll send a welcome email straight to your inbox.
+          Subscribe to our marketing emails. We&apos;ll queue a welcome email after you sign up.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -98,6 +106,11 @@ export default function SignupPage() {
             </div>
           </div>
 
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" required checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} />
+            I agree to receive marketing emails and can unsubscribe at any time.
+          </label>
+
           <button
             type="submit"
             disabled={isLoading}
@@ -109,7 +122,7 @@ export default function SignupPage() {
 
         {status.kind === 'success' && (
           <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-200">
-            Check your inbox — we sent you a welcome email!
+            Your welcome email is queued. It will arrive after Brew processes the send.
           </div>
         )}
         {status.kind === 'error' && (
