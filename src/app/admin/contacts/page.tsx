@@ -1,10 +1,11 @@
 import Link from 'next/link'
-import { brew } from '@/lib/brew'
+import { getBrewClient } from '@/lib/brew'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ContactsPage() {
-  const { contacts, pagination } = await brew.contacts.list({ limit: 50 })
+  const brew = getBrewClient()
+  const { data: contacts, pagination } = await brew.contacts.search({ limit: 50 })
 
   return (
     <main className="min-h-screen bg-zinc-50 px-6 py-10 dark:bg-zinc-950">
@@ -54,9 +55,9 @@ export default async function ContactsPage() {
                       </Badge>
                     </Td>
                     <Td>
-                      {c.verificationStatus ? (
-                        <Badge tone={verificationTone(c.verificationStatus)}>
-                          {c.verificationStatus}
+                      {c.validationStatus ? (
+                        <Badge tone={verificationTone(c.validationStatus)}>
+                          {c.validationStatus}
                         </Badge>
                       ) : (
                         <span className="text-zinc-400">—</span>

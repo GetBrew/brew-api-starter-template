@@ -1,83 +1,72 @@
-# Brew Welcome Email Platform
+# Brew welcome email starter
 
-A Next.js app that sends a transactional welcome email via the Brew SDK every time a user signs up.
-
-## How It Works
-
-1. User fills out the signup form (email, first name, last name)
-2. Their contact is upserted into Brew with `source: "signup"`
-3. A pre-made welcome email is sent to their inbox instantly via Brew
+A Next.js demo that records an explicit marketing opt-in and queues a saved
+welcome email through the current Brew TypeScript SDK. This is a marketing
+signup flow. Transactional receipts and account notifications instead use a
+published event automation on a transactional-purpose domain.
 
 ## Setup
 
-### 1. Install dependencies
+1. Run `npm ci`.
+2. In [Brew API settings](https://brew.new/settings/api), create a **brand-scoped**
+   key with `contacts`, `emails`, and `sends` permissions. The optional admin
+   screens also need `domains` and `audiences` read access.
+3. Create a welcome design in Brew and copy its **emailId** from the design's
+   details. Workspace URLs may identify a group or canvas, so do not infer an
+   emailId from a URL segment.
+4. Register and verify a **marketing-purpose** sending domain and copy its domainId.
+   The welcome design needs an unsubscribe link for a live marketing send.
+5. Copy `.env.example` to `.env.local` and fill in the credentials and IDs.
+   Set a separate, strong admin password to enable the admin screens.
+6. Run `npm run dev` and submit the form. The checkbox is required. Contact
+   upsert records `source: "signup"`; Brew defines that custom field automatically.
+   The SDK's `emails.send` queues the welcome email and returns a sendId.
+
+The optional Signups audience is a saved filter where `source` equals `signup`.
+The form does not create an application account. In a real application, run
+this integration after your own signup and consent checks and protect the
+public submission boundary with your application's abuse controls.
+
+## Environment
+
+```env
+BREW_API_KEY=your_brand_scoped_key
+BREW_WELCOME_EMAIL_ID=your_email_id
+BREW_DOMAIN_ID=your_verified_marketing_domain_id
+ADMIN_USERNAME=your_admin_username
+ADMIN_PASSWORD=your_separate_strong_admin_password
+```
+
+Keep credentials server-side and out of Git. Admin credentials protect
+`/admin` and `/admin/contacts` through the Next proxy; access fails closed when
+those credentials are absent. Use HTTPS when deploying Basic authentication,
+or replace it with your application's session authentication.
+
+## Request and retry behavior
+
+`POST /api/signup` requires `email`, `firstName`, `lastName`,
+`marketingConsent: true`, and a UUID `Idempotency-Key` header. Invalid input
+causes no Brew calls. The contact upsert and welcome send have separate stable
+keys derived from that UUID. The form retains the key when retrying an unchanged
+failed submission and creates a fresh one for a new intended submission.
+
+A `202` response means **queued**, not delivered. It returns
+`{ success: true, sendId, status }`; follow the send with `brew.sends.get(sendId)`.
+Do not invent a new key after an uncertain outcome merely to retry it.
+
+## Validation and deployment
 
 ```bash
-npm install
+npm run typecheck
+npm run lint
+npm test
+npm run build
 ```
 
-### 2. Get your Brew credentials
+Tests use injected SDK seams and a mocked fetch; they never contact the Brew
+API. CI runs typecheck, lint, tests, and a production build. Deploy to Vercel
+with the environment values above and redeploy after changing them.
 
-- **API key:** Go to [brew.new/settings/api](https://brew.new/settings/api) and create an API key.
-- **Welcome email:** Go to [brew.new](https://brew.new) and create a welcome email. Once it exists, click into that specific email template — the URL will look like `https://brew.new/emails/<emailId>`. Copy the `<emailId>` segment from the URL; that is the value you'll use for `BREW_WELCOME_EMAIL_ID`. If you ever swap the welcome email for a different template, repeat this step and update the value in **both** `.env.local` and Vercel → Settings → Environment Variables, then redeploy.
-- **Sending domain:** Go to brew.new settings and verify a sending domain — copy its `domainId`.
-
-### 3. Create `.env.local` in the project root
-
-```
-BREW_API_KEY=brew_your_key_here
-BREW_WELCOME_EMAIL_ID=your_email_id_here
-BREW_DOMAIN_ID=your_domain_id_here
-```
-
-### 4. Set up the Signups audience in Brew
-
-- Go to brew.new → Audience → New Audience
-- Set filter: `source` equals `signup`
-- Save as "Signups"
-- All signup form submissions will appear here automatically
-
-### 5. Run locally
-
-```bash
-npm run dev
-```
-
-### 6. Deploy to Vercel
-
-- Push to GitHub and import in Vercel
-- Add the three env vars in **Vercel → Settings → Environment Variables** (the same values from `.env.local`, including the `BREW_WELCOME_EMAIL_ID` you copied from the email template URL)
-- Redeploy so the new env vars are picked up (env var changes do not apply to existing deployments)
-- If you later change the welcome email template, update `BREW_WELCOME_EMAIL_ID` in **both** `.env.local` and the Vercel dashboard, then redeploy
-
-## Pages
-
-- `/` — Signup form
-- `/admin` — Shows your domains, emails, contact count, and audiences
-- `/admin/contacts` — Full contact list with verification status
-
-## Optional: Generate a unique email per signup instead of a static one
-
-If you want Brew to AI-generate a fresh welcome email for every signup instead of using a pre-made one, replace the sends flow in `src/app/api/signup/route.ts` with:
-
-```ts
-const generated = await brew.emails.generate({
-  prompt: `Create a warm friendly welcome email for ${firstName} ${lastName} who just signed up. Use the brand's design and tone. Include a welcome message and a get started CTA.`,
-})
-
-if (!('emailId' in generated)) {
-  return NextResponse.json(
-    { error: 'Email generation failed' },
-    { status: 500 }
-  )
-}
-
-await brew.sends.create({
-  emailId: generated.emailId,
-  domainId: process.env.BREW_DOMAIN_ID!,
-  subject: `Welcome, ${firstName}!`,
-  emails: [email],
-})
-```
-
-Note: This approach costs Brew credits per signup and adds **30–90 seconds** to the signup response (per the SDK's documented agent runtime). Recommended for low-volume or personalized flows only. Remove `BREW_WELCOME_EMAIL_ID` from your env vars if using this approach, and set `export const maxDuration = 300` in the route so Vercel's serverless timeout doesn't kill the request mid-generation.
+Generate or edit the saved welcome design before serving signup traffic. To
+personalize it, use merge tags from contact properties. A new AI generation
+on every signup adds latency and credits and is not part of this demo.
